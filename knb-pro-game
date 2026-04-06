@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>КНБ PRO</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    :root { --bg: #0a0f1c; --accent: #00ff9d; --gold: #ffd700; }
+    body {
+      margin: 0; padding: 0; font-family: system-ui, sans-serif;
+      background: var(--bg); color: white; height: 100vh; overflow: hidden;
+      display: flex; flex-direction: column; align-items: center;
+    }
+    h1 { font-size: 2.2rem; margin: 12px 0 8px; text-shadow: 0 0 20px var(--accent); }
+    .stats { display: flex; gap: 25px; font-size: 1.2rem; margin: 10px 0; flex-wrap: wrap; justify-content: center; }
+    .arena { width: 340px; height: 180px; margin: 20px 0; display: flex; justify-content: space-around; align-items: center; font-size: 88px; }
+    
+    .choice {
+      width: 120px; height: 120px; font-size: 72px;
+      background: rgba(255,255,255,0.09); border: 5px solid rgba(0,255,157,0.4);
+      border-radius: 30px; display: flex; align-items: center; justify-content: center;
+      cursor: pointer; transition: all 0.3s;
+    }
+    .choice:hover, .choice:active { transform: scale(1.3) rotate(12deg); border-color: var(--accent); }
+
+    .result { font-size: 1.95rem; margin: 15px 0; min-height: 85px; font-weight: bold; text-align: center; }
+
+    button {
+      padding: 14px 28px; margin: 8px; font-size: 1.1rem; border: none; border-radius: 50px;
+      font-weight: bold; cursor: pointer;
+    }
+    .cheat-btn { background: #ff3b5c; color: white; }
+    .donate-btn { background: var(--gold); color: #0a0f1c; }
+  </style>
+</head>
+<body>
+  <h1>✊ КНБ PRO ✋</h1>
+
+  <div class="stats">
+    <div>Ты: <span id="playerScore">0</span></div>
+    <div>Бот: <span id="botScore">0</span></div>
+    <div>Серия: <span id="streak">0</span></div>
+    <div>Лучшая: <span id="bestStreak">0</span></div>
+  </div>
+
+  <div class="arena">
+    <div id="playerSide">❓</div>
+    <div style="font-size:48px; opacity:0.4;">VS</div>
+    <div id="botSide">❓</div>
+  </div>
+
+  <div class="result" id="result">Сделай ход!</div>
+
+  <div style="display:flex; gap:22px; margin:25px 0;">
+    <div class="choice" data-choice="rock">🪨</div>
+    <div class="choice" data-choice="paper">📄</div>
+    <div class="choice" data-choice="scissors">✂️</div>
+  </div>
+
+  <div>
+    <button onclick="showCheatMenu()" class="cheat-btn">🔥 Открыть читы</button>
+    <button onclick="showDonation()" class="donate-btn">⭐ Донат</button>
+  </div>
+
+  <!-- Меню читов -->
+  <div id="cheatMenu" style="position:fixed;inset:0;background:rgba(0,0,0,0.96);display:none;align-items:center;justify-content:center;z-index:300;">
+    <div style="background:#16213e;padding:25px;border-radius:22px;width:92%;max-width:380px;border:3px solid #00ff9d;">
+      <div style="font-size:1.8rem;text-align:center;color:#00ff9d;margin-bottom:20px;">🔥 МЕНЮ ЧИТОВ</div>
+      
+      <div onclick="useCheat('cheat')" class="item" style="padding:14px;margin:8px 0;background:rgba(255,255,255,0.08);border-radius:14px;cursor:pointer;">Обычный чит</div>
+      <div onclick="useCheat('godmode')" class="item" style="padding:14px;margin:8px 0;background:rgba(255,255,255,0.08);border-radius:14px;cursor:pointer;">+100 побед</div>
+      <div onclick="useCheat('immortal')" class="item" style="padding:14px;margin:8px 0;background:rgba(255,255,255,0.08);border-radius:14px;cursor:pointer;">Бессмертие 30 мин</div>
+      <div onclick="useCheat('autowin')" class="item" style="padding:14px;margin:8px 0;background:rgba(255,255,255,0.08);border-radius:14px;cursor:pointer;">Автопобеда</div>
+      <div onclick="useCheat('rain')" class="item" style="padding:14px;margin:8px 0;background:rgba(255,255,255,0.08);border-radius:14px;cursor:pointer;">+500 побед</div>
+      <div onclick="useCheat('boom')" class="item" style="padding:14px;margin:8px 0;background:rgba(255,255,255,0.08);border-radius:14px;cursor:pointer;">+10000 побед</div>
+
+      <div style="text-align:center;margin-top:25px;"><button onclick="hideCheatMenu()" style="background:#ff3b5c;padding:12px 40px;">Закрыть</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const tg = window.Telegram.WebApp;
+    tg.expand(); tg.ready();
+    tg.setHeaderColor("#0a0f1c");
+    tg.setBackgroundColor("#0a0f1c");
+
+    let playerScore = 0, botScore = 0, currentStreak = 0, bestStreak = 0;
+    let isCheatMode = false, isAutoWin = false, immortalUntil = 0;
+
+    const choices = { rock: "🪨", paper: "📄", scissors: "✂️" };
+
+    function updateUI() {
+      document.getElementById('playerScore').textContent = playerScore;
+      document.getElementById('botScore').textContent = botScore;
+      document.getElementById('streak').textContent = currentStreak;
+      document.getElementById('bestStreak').textContent = bestStreak;
+    }
+
+    function animate(side, emoji) {
+      const el = document.getElementById(side);
+      el.style.transition = 'none';
+      el.style.transform = 'scale(0.4)';
+      el.style.opacity = '0';
+      setTimeout(() => {
+        el.textContent = emoji;
+        el.style.transition = 'all 0.5s cubic-bezier(0.68, -0.55, 0.27, 1.55)';
+        el.style.transform = 'scale(1.4)';
+        el.style.opacity = '1';
+        setTimeout(() => el.style.transform = 'scale(1)', 250);
+      }, 180);
+    }
+
+    // Игра
+    document.querySelectorAll('.choice').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const playerChoice = btn.dataset.choice;
+        const botChoice = Object.keys(choices)[Math.floor(Math.random() * 3)];
+
+        const immortal = Date.now() < immortalUntil || isAutoWin;
+        const finalBot = (isCheatMode || immortal) 
+          ? (playerChoice === "rock" ? "scissors" : playerChoice === "paper" ? "rock" : "paper")
+          : botChoice;
+
+        animate('playerSide', choices[playerChoice]);
+        animate('botSide', choices[finalBot]);
+
+        let res = "";
+        if (playerChoice === finalBot) {
+          res = "🤝 Ничья!";
+          currentStreak = 0;
+        } else if (
+          (playerChoice === "rock" && finalBot === "scissors") ||
+          (playerChoice === "paper" && finalBot === "rock") ||
+          (playerChoice === "scissors" && finalBot === "paper")
+        ) {
+          playerScore++;
+          currentStreak++;
+          res = "🎉 Ты выиграл!";
+        } else {
+          botScore++;
+          currentStreak = 0;
+          res = "😢 Бот выиграл!";
+        }
+
+        if (currentStreak > bestStreak) bestStreak = currentStreak;
+
+        document.getElementById('result').innerHTML = <b>${res}</b>;
+        updateUI();
+      });
+    });
+
+    // Меню читов
+    function showCheatMenu() {
+      document.getElementById('cheatMenu').style.display = 'flex';
+    }
+
+    function hideCheatMenu() {
+      document.getElementById('cheatMenu').style.display = 'none';
+    }
+
+    function useCheat(type) {
+      hideCheatMenu();
+      switch(type) {
+        case 'cheat': isCheatMode = !isCheatMode; alert(isCheatMode ? "✅ Чит включён" : "Чит выключен"); break;
+        case 'godmode': playerScore += 100; alert("+100 побед"); break;
+        case 'immortal': immortalUntil = Date.now() + 30*60*1000; alert("🛡️ Бессмертие 30 минут"); break;
+        case 'autowin': isAutoWin = !isAutoWin; alert(isAutoWin ? "🚀 Автопобеда включена" : "Автопобеда выключена"); break;
+        case 'rain': playerScore += 500; alert("+500 побед"); break;
+        case 'boom': playerScore += 10000; alert("💥 +10000 побед"); break;
+      }
+      updateUI();
+    }
+
+    function showDonation() {
+      alert("Донат пока в разработке.\nСкоро будет работать через Telegram Stars ⭐");
+    }
+
+    // Запуск
+    window.onload = () => {
+      updateUI();
+      tg.showAlert("Игра обновлена!\nНажми кнопку «Открыть читы»");
+    };
+  </script>
+</body>
+</html>
